@@ -75,7 +75,9 @@ public void setup()
    * Indico inoltre fino a quale char è necessario porre i byte nel buffer
    * prima di chiamare serialEvent.
    */
-  port = new Serial(this, Serial.list()[0], BAUDRATE);
+   
+   // TODO Fix hardcode serial creation using a SMART interface
+  port = new Serial(this, Serial.list()[2], BAUDRATE);
   port.buffer(PACKET_SIZE);
   //port.bufferUntil('\n');
   
@@ -153,8 +155,8 @@ public void customGUI()
  * La routine di calibrazione funziona in questo modo.
  * Al click del bottone viene controllato se la casella
  * di routine è spuntata e in caso negativo si procede
- * con la normale calibrazione singola altrimenti si 
- * porta a vero la variabile calibrationRoutine, si
+ * con la normale calibrazione singola. Altrimenti si 
+ * porta a vero la variabile calibrationRoutine, 
  * si inzia con la prima utilizzando i parametri nella
  * GUI, e poi ogni volta che viene chiuso un file viene
  * chiamata questa funzione. Questa incrementa i valori
@@ -164,6 +166,7 @@ public void customGUI()
  * l'acquisizione successiva supererebbe il massimo della
  * siringa.
  */
+ 
 public void startCalibration()
 {
   // Incremento i valori e controllo i valori massimi

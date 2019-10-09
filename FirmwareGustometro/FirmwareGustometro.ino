@@ -1,3 +1,7 @@
+
+// DA IMPLEMENTARE TIMING JITTERATO
+
+
 /*
  * FIRMWARE GUSTOMETRO
  * Francesco Pudda A.A. 2018/2019
@@ -87,6 +91,7 @@
 #define TTL_MSB_PIN 10
 #define TTL_LENGTH 50 // ms
 #define ISI 2000 // ms
+#define ISI_JITTER 300 // ms 
 #define STARTING_PULSES 5
 
 // Array delle classi dei motori, più comodo rispetto a
@@ -244,7 +249,7 @@ void loop()
 
         // Genero un ritardo pari all'isi scelto
         // meno la durata dell'impulso
-        delay(ISI - parameters[P_PULSE_DURATION]);
+        delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER)); //jitter
       }
       while (command != "S");
     }
@@ -261,7 +266,7 @@ void loop()
          
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));//jitter
       }
       
       // Itero P_TASTANT_BLOCKS volte
@@ -289,7 +294,7 @@ void loop()
           // o attesa
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));//jitter
         }
 
         // Dopo gli impulsi di neutro invio P_TASTANT_PULSES di gusto con stesso protocollo
@@ -309,7 +314,7 @@ void loop()
           
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));//jitter
         }
       }
     }
@@ -325,7 +330,7 @@ void loop()
           runSpeedUntilPositionWithTTL(&steppersArray[0], TTL_D);
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));
       }
       
       // L'unica modalità in cui oltre ai parametri dopo viene
@@ -361,7 +366,7 @@ void loop()
           
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));//jitter
         }
         for (int k = 0; k < parameters[P_TASTANT_PULSES]; k++)
         {
@@ -379,7 +384,7 @@ void loop()
           
           if (checkInterrupts()) { return; }
           
-          delay(ISI - parameters[P_PULSE_DURATION]);
+          delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER));//jitter
         }
       }
     }
