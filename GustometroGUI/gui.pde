@@ -70,6 +70,9 @@ public void bt_startCalibration_click(GButton source, GEvent event) { //_CODE_:b
   String params = getParameters();
   if (params != "")
   {
+    port.buffer(CALIBRATION_BUFFER_SIZE);
+    calibrationMode = true;
+    
     calibrationRoutine = cb_routine.isSelected();
     calibrationVolume = (int) round(Float.parseFloat(tf_pulseVolume.getText())) *
         Integer.parseInt(tf_pulsesForCalibration.getText());
@@ -88,7 +91,10 @@ public void bt_startCalibration_click(GButton source, GEvent event) { //_CODE_:b
 public void bt_protocol_click(GButton source, GEvent event) { //_CODE_:bt_protocol:446130:
   String params = getParameters();
   if (params != "")
-  {  
+  {
+    port.buffer(FEEDBACK_BUFFER_SIZE);
+    calibrationMode = false;
+    
     int nMotors = dl_nChannels.getSelectedIndex();
     
     if (nMotors == 0)

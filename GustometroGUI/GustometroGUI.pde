@@ -46,7 +46,8 @@ import java.util.*;
  * dalla GUI per non appesantirla visto l'elevato numero
  * di caselle.
  */
-final byte PACKET_SIZE = 6; // byte
+final byte CALIBRATION_BUFFER_SIZE = 6; // byte
+final byte FEEDBACK_BUFFER_SIZE = 2; // byte
 final int BAUDRATE = 1000000; // baud/s
 final float OMEGA_FLUX_COEFFICIENT = 2.715467f; // step/ul
 final short ROUTINE_INCREMENT = 100; // ms e ul
@@ -57,8 +58,12 @@ final short MAXIMUM_SPEED = 1200; // step/s
 
 Serial port;
 PrintWriter graph;
-byte[] bufferRX = new byte[PACKET_SIZE];
+byte[] bufferRX = new byte[CALIBRATION_BUFFER_SIZE];
+byte[] feedback = new byte[FEEDBACK_BUFFER_SIZE];
 
+/* Alcune variabili globali */
+int totalPulses;
+boolean calibrationMode = false;
 boolean calibrationRoutine = false;
 int calibrationVolume = 0;
  
@@ -75,11 +80,8 @@ public void setup()
    * Indico inoltre fino a quale char è necessario porre i byte nel buffer
    * prima di chiamare serialEvent.
    */
-   
-   // TODO Fix hardcode serial creation using a SMART interface
-  port = new Serial(this, Serial.list()[2], BAUDRATE);
-  port.buffer(PACKET_SIZE);
-  //port.bufferUntil('\n');
+  port = new Serial(this, Serial.list()[0], BAUDRATE);
+  //port.buffer(CALIBRATION_BUFFER_SIZE);
   
   // Imposto la codifica britannica altrimenti String.format
   // scrive i decimali con la virgola che non possono essere
@@ -105,41 +107,56 @@ public void draw()
  */
 void serialEvent(Serial port)
 {
-  bufferRX = port.readBytes();
-    
-  /* 
-   * Chiude il file se riceve un array con tutti elementi pari
-   * a 0xff. Qui viene indicato -1 perché in java non esistono
-   * primitive unsigned (tacci loro). Estraggo inoltre le informazioni
-   * sulla lettura analogica e digitale che erano state inglobate in
-   * un unico byte.
+  /* Controllo se sono in modalità calibrazione o protocollo
+   * per sapere quanti byte devo leggere ogni volta.
    */
-  if ((bufferRX[4] != -1) || (bufferRX[5] != -1))
+  if (calibrationMode)
   {
-    // Converto ed estraggo la maschera se presente
-    int currTime = (bufferRX[0] & 0xff) << 24 | (bufferRX[1] & 0xff) << 16 | (bufferRX[2] & 0xff) << 8 | bufferRX[3] & 0xff;
-    int motor = (bufferRX[4] & 0x80) / 0x80;
-    int board = ((bufferRX[4] - (bufferRX[4] & 0x80)) & 0xff) << 8 | bufferRX[5] & 0xff;
+    bufferRX = port.readBytes();
     
-    // Scrivo su file
-    graph.println(String.format("%s\t%s\t%s", Integer.toUnsignedString(currTime), Integer.toUnsignedString(board), Integer.toUnsignedString(motor*1023)));
+    /* 
+     * Chiude il file se riceve un array con tutti elementi pari
+     * a 0xff. Qui viene indicato -1 perché in java non esistono
+     * primitive unsigned (tacci loro). Estraggo inoltre le informazioni
+     * sulla lettura analogica e digitale che erano state inglobate in
+     * un unico byte.
+     */
+    if ((bufferRX[4] != -1) || (bufferRX[5] != -1))
+    {
+      // Converto ed estraggo la maschera se presente
+      int currTime = (bufferRX[0] & 0xff) << 24 | (bufferRX[1] & 0xff) << 16 | (bufferRX[2] & 0xff) << 8 | bufferRX[3] & 0xff;
+      int motor = (bufferRX[4] & 0x80) / 0x80;
+      int board = ((bufferRX[4] - (bufferRX[4] & 0x80)) & 0xff) << 8 | bufferRX[5] & 0xff;
+      
+      // Scrivo su file
+      graph.println(String.format("%s\t%s\t%s", Integer.toUnsignedString(currTime), Integer.toUnsignedString(board), Integer.toUnsignedString(motor*1023)));
+    }
+    else
+    {
+      // Attendo la scrittura su file di eventuali stringhe
+      // rimanenti e chiude il file
+      graph.flush();
+      graph.close();
+      println("File chiuso");
+      
+      // Se si è dentro la routine di calibrazione, quando
+      // chiude un file si chiama la funzione che controlla
+      // se ne va aperto un altro subito dopo
+      if (calibrationRoutine)
+      {
+        delay(1000);
+        startCalibration();
+      }
+    }
   }
   else
   {
-    // Attendo la scrittura su file di eventuali stringhe
-    // rimanenti e chiude il file
-    graph.flush();
-    graph.close();
-    println("File chiuso");
+    feedback = port.readBytes();
     
-    // Se si è dentro la routine di calibrazione, quando
-    // chiude un file si chiama la funzione che controlla
-    // se ne va aperto un altro subito dopo
-    if (calibrationRoutine)
-    {
-      delay(1000);
-      startCalibration();
-    }
+    int currentIndex = (feedback[0] & 0xff) << 8 | feedback[1] & 0xff;
+    
+    println(String.format("%s/%s", Integer.toUnsignedString(currentIndex),
+      Integer.toUnsignedString(totalPulses)));
   }
 }
 
@@ -155,8 +172,8 @@ public void customGUI()
  * La routine di calibrazione funziona in questo modo.
  * Al click del bottone viene controllato se la casella
  * di routine è spuntata e in caso negativo si procede
- * con la normale calibrazione singola. Altrimenti si 
- * porta a vero la variabile calibrationRoutine, 
+ * con la normale calibrazione singola altrimenti si 
+ * porta a vero la variabile calibrationRoutine, si
  * si inzia con la prima utilizzando i parametri nella
  * GUI, e poi ogni volta che viene chiuso un file viene
  * chiamata questa funzione. Questa incrementa i valori
@@ -166,7 +183,6 @@ public void customGUI()
  * l'acquisizione successiva supererebbe il massimo della
  * siringa.
  */
- 
 public void startCalibration()
 {
   // Incremento i valori e controllo i valori massimi
@@ -244,6 +260,11 @@ public String getParameters()
     int pulsesForCalibration = Integer.parseInt(tf_pulsesForCalibration.getText());
     int calibrationInterval = Integer.parseInt(tf_calibrationInterval.getText());   
     int triggerLength = Integer.parseInt(tf_triggerLength.getText());
+    
+    int nMotors = dl_nChannels.getSelectedIndex();
+    /* Immagazzino il numero di impulsi totali da fare in modalità protocollo */
+    totalPulses = 5 + neutralPulses * tastantBlocks * nMotors + 
+      tastantPulses * tastantBlocks * nMotors;
     
     // Avvertimento in caso si imposti una velocità troppo elevata
     // La velocità verrà poi riportata al valore massimo lato dalla
