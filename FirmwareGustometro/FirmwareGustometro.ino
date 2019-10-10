@@ -1,7 +1,3 @@
-
-// DA IMPLEMENTARE TIMING JITTERATO
-
-
 /*
  * FIRMWARE GUSTOMETRO
  * Francesco Pudda A.A. 2018/2019
@@ -77,7 +73,8 @@
 #define MOTOR_SAMPLING_PIN A3
 #define PLATE_SAMPLING_PIN A5
 #define SAMPLING_TIME 500 // us
-#define PACKET_SIZE 6 // byte
+#define CALIBRATION_BUFFER_SIZE 6 // byte
+#define FEEDBACK_BUFFER_SIZE 2 // byte
 
 // Velocità massima del motore
 #define MAX_SPEED 5000 // step/s
@@ -107,8 +104,20 @@ long parameters[MAX_PARAMS];
 // Stringa comando
 String command;
 
-// Array di byte da inviare
-byte bufferTX[PACKET_SIZE];
+// Array di byte da inviare durante la calibrazione
+byte bufferTX[CALIBRATION_BUFFER_SIZE];
+
+// Array di byte da inviare come feedback durante
+// l'esperimento
+byte feedback[FEEDBACK_BUFFER_SIZE];
+
+// Variabile che tiene traccia dell'indice dell'
+// impulso corrente (sessioni tanto lunghe da avere
+// necessità di usare long sono altamente improbabili).
+// Deve essere globale a meno di non voler passare il
+// suo puntatore come argmento della funzione 
+// runSpeedUntilPositionWithTTL
+unsigned int pulseIndex = 0;
 
 void setup()
 {
@@ -180,7 +189,12 @@ void loop()
     int nSteps = round(parameters[P_OMEGA] * parameters[P_PULSE_DURATION] / 1000);
 
     // Imposto durata del tempo di ON del trigger
-    // sul pin STEP
+    // sul pin STEP.
+    // Necessario tenere i tempi più bassi possibile
+    // tranne durante la calibrazione dove dovranno
+    // essere almeno pari all'intervallo di
+    // campionamento per essere sicuri di campionare
+    // il trigger.
     steppersArray[0].setMinPulseWidth(parameters[P_TRIGGER_LENGTH]);
     steppersArray[1].setMinPulseWidth(parameters[P_TRIGGER_LENGTH]);
     steppersArray[2].setMinPulseWidth(parameters[P_TRIGGER_LENGTH]);
@@ -252,6 +266,7 @@ void loop()
         delay(ISI - parameters[P_PULSE_DURATION]+random(-ISI_JITTER,ISI_JITTER)); //jitter
       }
       while (command != "S");
+      pulseIndex = 0; //azzero il conteggio
     }
     
     // Modalità a due motori con un gusto
@@ -343,11 +358,7 @@ void loop()
       // gusto, per questo l'array è lungo P_TASTANT_BLOCKS * 2
       long randomBlocks[parameters[P_TASTANT_BLOCKS] * 2];
       readModeParameters(&command, randomBlocks, parameters[P_TASTANT_BLOCKS] * 2);
-      /*for (int x = 0; x < (parameters[P_TASTANT_BLOCKS] * 2); x++)
-      {
-        Serial.print(String(randomBlocks[x]) + ",");
-      }*/
-      Serial.println();
+  
       for (int i = 0; i < parameters[P_TASTANT_BLOCKS] * 2; i++)
       {
         for (int j = 0; j < parameters[P_NEUTRAL_PULSES]; j++)

@@ -47,6 +47,7 @@ boolean checkInterrupts()
     command = Serial.readString();
     if (command == "S")
     {
+      pulseIndex = 0; //azzero il conteggio
       return true;
     }
     else if (command == "W")
@@ -62,6 +63,21 @@ boolean checkInterrupts()
     }
     return false;
   }
+}
+
+/*
+ * Funzione per inviare il feedback ad ogni impulso
+ * Potrebbe essere usata per implementare altri
+ * feedback
+ */
+void sendFeedbackPacket(unsigned int index)
+{
+  // Codifico in big endian
+  feedback[0] = (index >> 8) & 0xff;
+  feedback[1] = index & 0xff;
+
+  // Invio il pachetto
+  Serial.write(feedback, FEEDBACK_BUFFER_SIZE);
 }
 
 /* 
@@ -88,6 +104,9 @@ void runSpeedUntilPositionWithTTL(AccelStepper *motor, int ttlpin)
   // Mando i pin opportuni ad HIGH
   digitalWrite(TTL_LSB_PIN, ttlpin & 1);
   digitalWrite(TTL_MSB_PIN, (ttlpin >> 1) & 1);
+  pulseIndex += 1;
+  sendFeedbackPacket(pulseIndex);
+  
 
   // Calcolo il numero di step che vanno fatti prima di
   // rimandare i pin a LOW partendo dalla velocità
@@ -135,8 +154,7 @@ void runSpeedUntilPositionWithTTL(AccelStepper *motor, int ttlpin)
  *  la fine della trasmissione è l'array di tutti gli elementi
  *  pari a FFh.
  */ 
-
-void sendPacket(unsigned long currTime, int board, bool motor)
+void sendCalibrationPacket(unsigned long currTime, int board, bool motor)
 {
   // Codifico in big endian e applico se necessario
   // la maschera
@@ -148,7 +166,7 @@ void sendPacket(unsigned long currTime, int board, bool motor)
   bufferTX[5] = board & 0xff;
 
   // Invio il pachetto
-  Serial.write(bufferTX, PACKET_SIZE);
+  Serial.write(bufferTX, CALIBRATION_BUFFER_SIZE);
 }
  
 void runSpeedUntilPositionWithSampling(AccelStepper *motor, long omega, long pulseDuration, long nPulses, long pulsesInterval)
@@ -181,7 +199,7 @@ void runSpeedUntilPositionWithSampling(AccelStepper *motor, long omega, long pul
       previousSamplingTime = currentTime;
       voltage_board = analogRead(PLATE_SAMPLING_PIN);
       voltage_motor = digitalRead(MOTOR_SAMPLING_PIN);
-      sendPacket(currentTime - timeOffset, voltage_board, voltage_motor);
+      sendCalibrationPacket(currentTime - timeOffset, voltage_board, voltage_motor);
     }
 
     // Blocco di inizio impulso
@@ -207,6 +225,6 @@ void runSpeedUntilPositionWithSampling(AccelStepper *motor, long omega, long pul
   Serial.flush();
 
   // Invio comando per indicare a processing di chiudere il file
-  memset(bufferTX,0xff,PACKET_SIZE);
-  Serial.write(bufferTX,PACKET_SIZE);
+  memset(bufferTX,0xff,CALIBRATION_BUFFER_SIZE);
+  Serial.write(bufferTX,CALIBRATION_BUFFER_SIZE);
 }
